@@ -20,7 +20,7 @@ import cv2
 import torch
 from torchvision import transforms
 
-from vicreg import VICReg
+#from vicreg import VICReg
 
 from yolov4.utils import *
 from yolov4.torch_utils import do_detect
@@ -108,6 +108,16 @@ class YOLOv4_Main():
         return boxes[0]
 
 
+class Cosine_Main():
+    def __init__(self, args, use_cuda=True, wt_path='model640.pth'):
+        if use_cuda"
+            self.model = torch.load(wt_path)
+            self.model.cuda().eval()
+        else:
+            self.model = torch.load(wt_path, map_location=torch.load.device('cpu'))
+            self.model = eval()
+
+
 if __name__ == "__main__":
     args = get_arguments()
 
@@ -130,8 +140,11 @@ if __name__ == "__main__":
         line = line.rstrip()
         outclass.append(line)
 
-    vicreg_main = VICReg_Main(args)
-    dsort = Deepsort_rbc(vicreg_main.model, w, h, use_cuda=True)
+    #vicreg_main = VICReg_Main(args)
+    #dsort = Deepsort_rbc(vicreg_main.model, w, h, use_cuda=True)
+
+    cosine_main = Cosine_Main(args)
+    dsort = Deepsort_rbc(cosine_main.model, w, h, use_cuda=True)
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter('result.mp4', fourcc, fps, (int(w), int(h)), True)

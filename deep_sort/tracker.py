@@ -95,7 +95,7 @@ class Tracker:
         #for t in self.tracks:
         #    if t.is_confirmed():
         #        print(len(t.features),'here_1',t.track_id,np.array(t.features).shape)
-        
+
         #print(np.array(features).shape)
 
         self.metric.partial_fit(
