@@ -64,14 +64,13 @@ class Deepsort_rbc():
         width = frame.shape[1]
         height = frame.shape[0]
 
-        bboxes = boxes[0].tolist()
-        for i in range(len(bboxes)):
-            box = bboxes[i]
+        for i in range(len(boxes)):
+            box = boxes[i]
 
-            x1 = int(box[0])# * width)
-            y1 = int(box[1])# * height)
-            x2 = int(box[2])# * width)
-            y2 = int(box[3])# * height)
+            x1 = int(box[0] * width)
+            y1 = int(box[1] * height)
+            x2 = int(box[2] * width)
+            y2 = int(box[3] * height)
 
             try:
                 crop = frame[y1:y2, x1:x2, :]
@@ -80,7 +79,7 @@ class Deepsort_rbc():
             except:
                 continue
 
-        if len(bboxes) != 0:
+        if len(boxes) != 0:
             crops = torch.stack(crops)
         return crops
 
@@ -109,9 +108,8 @@ class Deepsort_rbc():
         out_scores = []
         out_classes = []
 
-        bboxes = boxes[0].tolist()
-        for i in range(len(bboxes)):
-            detect = bboxes[i][:4]
+        for i in range(len(boxes)):
+            detect = boxes[i][:4]
             detect1 = [0]*4
             detect1[0] = detect[0] * self.width/640   # t
             detect1[1] = detect[1] * self.height/640  # l
@@ -120,8 +118,8 @@ class Deepsort_rbc():
 
 
             detections.append(detect1)
-            out_scores.append(bboxes[i][4])
-            out_classes.append(int(bboxes[i][-1]))
+            out_scores.append(boxes[i][4])
+            out_classes.append(int(boxes[i][-1]))
         detections = np.asarray(detections)
         out_scores = np.asarray(out_scores)
 

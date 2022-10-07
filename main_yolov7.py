@@ -18,96 +18,79 @@ import numpy as np
 import cv2
 
 import torch
+import torch.nn as nn
 from torchvision import transforms
 
-#from vicreg import VICReg
+from models.experimental import Ensemble
+from models.common import Conv, DWConv
+from utils.general import non_max_suppression, apply_classifier
 
-from yolov4.utils import *
-from yolov4.torch_utils import do_detect
-from yolov4.darknet2pytorch import Darknet
-
-from deep_sort.deepsort_y4 import Deepsort_rbc
+from deep_sort.deepsort import Deepsort_rbc
 
 def get_arguments():
     parser = argparse.ArgumentParser(
         description="Evaluate a pretrained model on ImageNet"
     )
 
-    '''
-    # Loss
-    parser.add_argument("--sim-coeff", type=float, default=25.0,
-                        help='Invariance regularization loss coefficient')
-    parser.add_argument("--std-coeff", type=float, default=25.0,
-                        help='Variance regularization loss coefficient')
-    parser.add_argument("--cov-coeff", type=float, default=1.0,
-                        help='Covariance regularization loss coefficient')
-    '''
-    # Data
     parser.add_argument("--input-video", type=str, required=True, help="path to dataset")
     parser.add_argument('--labels', dest='labels',
                         action='store', default='yolov4/coco.names', type=str,
                         help='Labels for detection')
-    parser.add_argument('--conf-thresh', type=float, default=0.4)
 
-    '''
-    # Checkpoint
-    parser.add_argument("--resnet-pretrained", type=Path, required=True, help="path to pretrained model")
-    parser.add_argument("--exp-dir", required=True, type=Path,
-                        metavar="DIR", help="path to checkpoint directory")
-    '''
+
+    parser.add_argument('--classes', nargs='+', type=int, help='filter by class: --class 0, or --class 0 2 3')
+    parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
+    parser.add_argument('--iou-thres', type=float, default=0.45, help='IOU threshold for NMS')
+
     return parser.parse_args()
 
-'''
-class VICReg_Main():
-    def __init__(self, args):
-        self.model = VICReg(args).cuda()
-        self.model.cuda()
-        self.model.eval()
+def load_class_names(namesfile):
+    class_names = []
+    with open(namesfile, 'r') as fp:
+        lines = fp.readlines()
+    for line in lines:
+        line = line.rstrip()
+        class_names.append(line)
+    return class_names
 
 
-    def run(self, args, x, y):
-        start_time = time.time()
-        # evaluate
-
-        transform = transforms.Compose([
-                transforms.ToPILImage(),
-                transforms.Resize(224),
-                transforms.CenterCrop(224),
-                transforms.ToTensor(),
-            ])
-        x = transform(x).unsqueeze(0)
-        y = transform(y).unsqueeze(0)
-
-        x = x.cuda(self.gpu, non_blocking=True)
-        y = y.cuda(self.gpu, non_blocking=True)
-
-        loss, repr_loss, std_loss, cov_loss = self.model.forward(x, y)
-        #print('repr_loss', (args.sim_coeff * repr_loss * 100).item(),
-        #      'std_loss', (args.std_coeff * std_loss).item(),
-        #      'cov_loss', (args.cov_coeff * cov_loss).item())
-
-        return (args.sim_coeff * repr_loss * 1000).item()
-'''
-
-class YOLOv4_Main():
-    def __init__(self, args, cfgfile='yolov4.cfg', weightfile='yolov4.weights'):
+class YOLOv7_Main():
+    def __init__(self, args, weightfile='yolov7.pt'):
         self.use_cuda = True
-        self.conf_thresh = args.conf_thresh
-        self.nms_thresh = 0.6
 
-        self.m = Darknet(cfgfile)
-        self.m.load_weights(weightfile)
-        self.m.cuda().eval()
+        self.model = Ensemble()
+        ckpt = torch.load(weightfile) #, map_location='cuda')
+        self.model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
+
+        # Compatibility updates
+        for m in self.model.modules():
+            if type(m) in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
+                m.inplace = True  # pytorch 1.7.0 compatibility
+            elif type(m) is nn.Upsample:
+                m.recompute_scale_factor = None  # torch 1.11.0 compatibility
+            elif type(m) is Conv:
+                m._non_persistent_buffers_set = set()  # pytorch 1.6.0 compatibility
+
+        self.model = self.model.half()
+        self.model.eval()
 
         self.class_names = load_class_names(args.labels)
 
-    def run(self, frame):
-        sized = cv2.resize(frame, (512, 512))
+
+    def run(self, frame, args):
+        sized = cv2.resize(frame, (640, 640))
         sized = cv2.cvtColor(sized, cv2.COLOR_BGR2RGB)
 
-        boxes = do_detect(self.m, sized, self.conf_thresh, self.nms_thresh, self.use_cuda)
+        image = sized / 255.0
+        image = image.transpose((2, 0, 1))
+        image = torch.from_numpy(image).to('cuda').half()
+        image = image.unsqueeze(0)
 
-        return boxes[0]
+        with torch.no_grad():
+            pred = self.model(image)[0]
+            pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, classes=args.classes, agnostic=True)
+
+        return pred
 
 
 class Cosine_Main():
@@ -124,20 +107,13 @@ if __name__ == "__main__":
     print(time.time())
     args = get_arguments()
 
-    '''
-    args.exp_dir.mkdir(parents=True, exist_ok=True)
-    stats_file = open(args.exp_dir / "stats.txt", "a", buffering=1)
-    print(" ".join(sys.argv))
-    print(" ".join(sys.argv), file=stats_file)
-    '''
-
     cap = cv2.VideoCapture(args.input_video)
     fps = int(cap.get(cv2.CAP_PROP_FPS))
     ret, frame = cap.read()
     h, w, c = frame.shape
     print(h, w, c)
 
-    yolov4_main = YOLOv4_Main(args)
+    yolov7_main = YOLOv7_Main(args)
     outclass = []
     with open('yolov4/coco.names', 'r') as fp:
         lines = fp.readlines()
@@ -145,8 +121,6 @@ if __name__ == "__main__":
         line = line.rstrip()
         outclass.append(line)
 
-    #vicreg_main = VICReg_Main(args)
-    #dsort = Deepsort_rbc(vicreg_main.model, w, h, use_cuda=True)
 
     cosine_main = Cosine_Main(args)
     dsort = Deepsort_rbc(cosine_main.model, w, h, use_cuda=True)
@@ -167,12 +141,12 @@ if __name__ == "__main__":
             break
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
-        result = yolov4_main.run(frame)
+        result = yolov7_main.run(frame, args)
         tracker = dsort.a_run_deep_sort(frame, result)
+
 
         if c == 100:
             break
-
     '''
         for track in tracker.tracks:
 #                 print('track.is_confirmed(): ', track.is_confirmed())
@@ -189,11 +163,11 @@ if __name__ == "__main__":
             r = bbox[2]  ## x2
             b = bbox[3]  ## y2
             name = outclass[track.outclass]
+            frame = cv2.rectangle(frame, (int(l), int(t)), (int(r), int(b)), (255,0,0), 2)
             frame = cv2.putText(frame, f'{id_num}:{name}', (int(l), int(t)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
 
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         out.write(frame)
     out.release()
     '''
-
     print(time.time())
