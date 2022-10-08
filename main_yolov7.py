@@ -56,10 +56,14 @@ def load_class_names(namesfile):
 
 class YOLOv7_Main():
     def __init__(self, args, weightfile='yolov7.pt'):
-        self.use_cuda = True
+        self.use_cuda = torch.cuda.is_available()
+        if self.use_cuda:
+            self.device = 'cuda'
+        else:
+            self.device = 'cpu'
 
         self.model = Ensemble()
-        ckpt = torch.load(weightfile) #, map_location='cuda')
+        ckpt = torch.load(weightfile, map_location=self.device)
         self.model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
 
         # Compatibility updates
@@ -83,7 +87,7 @@ class YOLOv7_Main():
 
         image = sized / 255.0
         image = image.transpose((2, 0, 1))
-        image = torch.from_numpy(image).to('cuda').half()
+        image = torch.from_numpy(image).to(self.device).half()
         image = image.unsqueeze(0)
 
         with torch.no_grad():
@@ -94,12 +98,13 @@ class YOLOv7_Main():
 
 
 class Cosine_Main():
-    def __init__(self, args, use_cuda=True, wt_path='model640.pt'):
+    def __init__(self, args, wt_path='model640.pt'):
+        use_cuda = torch.cuda.is_avaliable()
         if use_cuda:
             self.model = torch.load(wt_path)
             self.model.cuda().eval()
         else:
-            self.model = torch.load(wt_path, map_location=torch.load.device('cpu'))
+            self.model = torch.load(wt_path, map_location='cpu')
             self.model = eval()
 
 
