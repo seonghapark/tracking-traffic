@@ -99,7 +99,8 @@ class YOLOv7_Main():
 
 class Cosine_Main():
     def __init__(self, args, wt_path='model640.pt'):
-        use_cuda = torch.cuda.is_available()
+
+        use_cuda = torch.cuda.is_avaliable()
         if use_cuda:
             self.model = torch.load(wt_path)
             self.model.cuda().eval()
