@@ -27,11 +27,15 @@ from utils.general import non_max_suppression, apply_classifier
 
 from deep_sort.deepsort import Deepsort_rbc
 
+from utils_trt.utils import preproc, vis
+from utils_trt.utils import BaseEngine
+
 def get_arguments():
     parser = argparse.ArgumentParser(
         description="Evaluate a pretrained model on ImageNet"
     )
 
+    parser.add_argument('--engine', type=str, required=True, help='yolov7 trt model path')
     parser.add_argument("--input-video", type=str, required=True, help="path to dataset")
     parser.add_argument('--labels', dest='labels',
                         action='store', default='yolov4/coco.names', type=str,
@@ -53,7 +57,7 @@ def load_class_names(namesfile):
         class_names.append(line)
     return class_names
 
-
+'''
 class YOLOv7_Main():
     def __init__(self, args, weightfile='yolov7.pt'):
         self.use_cuda = torch.cuda.is_available()
@@ -95,6 +99,13 @@ class YOLOv7_Main():
             pred = non_max_suppression(pred, args.conf_thres, args.iou_thres, classes=args.classes, agnostic=True)
 
         return pred
+'''
+
+class Predictor(BaseEngine):
+    def __init__(self, engine_path , imgsz=(640,640)):
+        super(Predictor, self).__init__(engine_path)
+        self.imgsz = imgsz # your model infer image size
+        self.n_classes = 80  # your model classes
 
 
 class Cosine_Main():
@@ -118,7 +129,9 @@ if __name__ == "__main__":
     h, w, c = frame.shape
     print(h, w, c)
 
-    yolov7_main = YOLOv7_Main(args)
+    #yolov7_main = YOLOv7_Main(args)
+    pred = Predictor(engine_path=args.engine)
+
     outclass = []
     with open('yolov4/coco.names', 'r') as fp:
         lines = fp.readlines()
@@ -149,27 +162,9 @@ if __name__ == "__main__":
 
         print('s', time.time())
         #result = yolov7_main.run(frame, args)
+        result = pred.inference(frame, conf=0.25, end2end=False)
 
-
-
-        '''
-        results = yolov7_main.run(frame, args)[0].tolist()
-        for result in results:
-            l = result[0] * w/640  ## x1
-            t = result[1] * h/640  ## y1
-            r = result[2] * w/640  ## x2
-            b = result[3] * h/640  ## y2
-
-            conf = round(result[4], 2)
-            name = outclass[int(result[5])]
-            frame = cv2.rectangle(frame, (int(l), int(t)), (int(r), int(b)), (255,0,0), 2)
-            #frame = cv2.putText(frame, f'{id_num}:{name}', (int(l), int(t)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-            frame = cv2.putText(frame, f'{name}:{conf}', (int(l), int(t)-10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0,255,0), 2)
-
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-        cv2.imwrite('test.jpg', frame)
-        '''
-
+        print(result)
 
         print(time.time())
         tracker = dsort.a_run_deep_sort(frame, result)
@@ -177,7 +172,6 @@ if __name__ == "__main__":
         if c == 10:
             break
 
-    '''
         for track in tracker.tracks:
 #                 print('track.is_confirmed(): ', track.is_confirmed())
 #                 print('track.time_since_update: ', track.time_since_update)
@@ -203,4 +197,3 @@ if __name__ == "__main__":
     out.release()
 
     print(time.time())
-    '''

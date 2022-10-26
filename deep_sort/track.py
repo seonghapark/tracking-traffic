@@ -63,7 +63,7 @@ class Track:
 
     """
 
-    def __init__(self, mean, covariance, track_id, n_init, max_age, outclass,
+    def __init__(self, mean, covariance, track_id, n_init, max_age, outclass, confidence,
                  feature=None):
         self.mean = mean
         self.covariance = covariance
@@ -73,6 +73,7 @@ class Track:
         self.time_since_update = 0
 
         self.outclass = outclass
+        self.confidence = confidence
 
         self.state = TrackState.Tentative
         self.features = []

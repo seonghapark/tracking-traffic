@@ -170,7 +170,7 @@ if __name__ == "__main__":
         result = yolov4_main.run(frame)
         tracker = dsort.a_run_deep_sort(frame, result)
 
-        if c == 100:
+        if c == 10:
             break
 
     '''
