@@ -32,6 +32,7 @@ def get_arguments():
         description="Evaluate a pretrained model on ImageNet"
     )
 
+    parser.add_argument('--weight', type=str, required=True, help='model name')
     parser.add_argument("--input-video", type=str, required=True, help="path to dataset")
     parser.add_argument('--labels', dest='labels',
                         action='store', default='yolov4/coco.names', type=str,
@@ -55,7 +56,7 @@ def load_class_names(namesfile):
 
 
 class YOLOv7_Main():
-    def __init__(self, args, weightfile='yolov7.pt'):
+    def __init__(self, args, weightfile):
         self.use_cuda = torch.cuda.is_available()
         if self.use_cuda:
             self.device = 'cuda'
@@ -100,7 +101,7 @@ class YOLOv7_Main():
 class Cosine_Main():
     def __init__(self, args, wt_path='model640.pt'):
 
-        use_cuda = torch.cuda.is_avaliable()
+        use_cuda = torch.cuda.is_available()
         if use_cuda:
             self.model = torch.load(wt_path)
             self.model.cuda().eval()
@@ -119,7 +120,7 @@ if __name__ == "__main__":
     h, w, c = frame.shape
     print(h, w, c)
 
-    yolov7_main = YOLOv7_Main(args)
+    yolov7_main = YOLOv7_Main(args, args.weight)
     outclass = []
     with open('yolov4/coco.names', 'r') as fp:
         lines = fp.readlines()
@@ -149,7 +150,7 @@ if __name__ == "__main__":
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
         print('s', time.time())
-        #result = yolov7_main.run(frame, args)
+        result = yolov7_main.run(frame, args)
 
 
 
@@ -170,7 +171,6 @@ if __name__ == "__main__":
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         cv2.imwrite('test.jpg', frame)
         '''
-
 
         print(time.time())
         tracker = dsort.a_run_deep_sort(frame, result)
